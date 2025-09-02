@@ -4,7 +4,7 @@ class Config:
     
     LOG_LEVEL = logging.INFO
     
-    CLIENT_SECRETS_FILE = "/Users/madhursharma/Downloads/client_secret_102980865404-82jd7n2hlc65553v0pbhc543tns90dg0.apps.googleusercontent.com.json"
+    CLIENT_SECRETS_FILE = "config.json"
     
     THUMBNAIL_IMAGE_SIZE = 10 #MB
     VIDEO_FILE_SIZE = 500 #MB
