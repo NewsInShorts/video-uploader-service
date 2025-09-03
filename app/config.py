@@ -1,10 +1,11 @@
+import os
 import logging
 
-class Config:
+class BaseConfig:
     
     LOG_LEVEL = logging.INFO
     
-    CLIENT_SECRETS_FILE = "config.json"
+    CLIENT_SECRETS_FILE = "/Users/madhursharma/Downloads/client_secret_102980865404-82jd7n2hlc65553v0pbhc543tns90dg0.apps.googleusercontent.com.json"
     
     THUMBNAIL_IMAGE_SIZE = 10 #MB
     VIDEO_FILE_SIZE = 500 #MB
@@ -13,3 +14,24 @@ class Config:
     MONGO_DB = "video_uploader"
     MONGO_COLLECTION = "upload_requests"
     
+    REDIRECT_URI = "http://localhost:8000/auth/oauth2callback?channel_id="
+    
+class ProductionConfig(BaseConfig):
+    
+    LOG_LEVEL = logging.ERROR
+    
+    CLIENT_SECRETS_FILE  = "secret.json" 
+    
+    MONGO_URI = "mongodb://localhost:27017"
+    MONGO_DB = "video_uploader"
+    MONGO_COLLECTION = "upload_requests"
+    
+    REDIRECT_URI = "http://localhost:8000/auth/oauth2callback?channel_id="
+    
+env = os.getenv("APP_ENV", "development").lower()
+
+if env == "production":
+    Config = ProductionConfig()
+
+else:
+    Config = BaseConfig()

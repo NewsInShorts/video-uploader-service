@@ -1,48 +1,16 @@
 import os
 import logging
-import google_auth_oauthlib.flow
-import google.auth.transport.requests
-import googleapiclient.discovery
 from googleapiclient.errors import HttpError
-from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+from app.services.auth_manager import AuthManager
 
 logger = logging.getLogger("youtube_uploader")
 
 
-class YouTubeUploader:
-    def __init__(self, client_secrets_file: str, token_file: str = "token.json"):
-        if not os.path.exists(client_secrets_file):
-            logger.error(f"Client secrets file not found: {client_secrets_file}")
-            raise FileNotFoundError(f"Client secrets file not found: {client_secrets_file}")
-
-        self.client_secrets_file = client_secrets_file
-        self.token_file = token_file
-        self.youtube = self.authenticate()
-
-    def authenticate(self):
-        creds = None
-        #os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-        if os.path.exists(self.token_file):
-            creds = Credentials.from_authorized_user_file(self.token_file, SCOPES)
-
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(google.auth.transport.requests.Request())
-            else:
-                flow = google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file(
-                    self.client_secrets_file, SCOPES
-                )
-                creds = flow.run_console()
-                #creds = flow.run_local_server(port=0)
-
-            with open(self.token_file, "w") as token:
-                token.write(creds.to_json())
-
-        return googleapiclient.discovery.build("youtube", "v3", credentials=creds)        
-
+class YouTubeUploaderService:
+    def __init__(self, auth_manager: AuthManager):
+        self.auth_manager = auth_manager
 
     def upload_video(
         self,
@@ -50,66 +18,77 @@ class YouTubeUploader:
         title: str,
         description: str,
         video_path: str,
-        thumbnail_path: str,
-        category_id: int
+        thumbnail_path: str = None,
+        category_id: int = 22,
+        privacy_status: str = "public"
     ):
-        if not channel_id.strip():
-            raise ValueError("Channel ID cannot be empty")
-        if not title.strip():
-            raise ValueError("Title cannot be empty")
-        if not description.strip():
-            raise ValueError("Description cannot be empty")
+        logger.info("Preparing to upload video",
+                    extra={"channel_id": channel_id, "title": title})
 
+        if not channel_id or not channel_id.strip():
+            raise ValueError("Channel name cannot be empty")
+        if not title or len(title) > 100:
+            raise ValueError("Title is required and must be <= 100 characters")
+        if not description or len(description) > 5000:
+            raise ValueError("Description is required and must be <= 5000 characters")
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video file not found: {video_path}")
         if thumbnail_path and not os.path.exists(thumbnail_path):
             raise FileNotFoundError(f"Thumbnail file not found: {thumbnail_path}")
+        if privacy_status not in ["public", "private", "unlisted"]:
+            raise ValueError("privacy_status must be 'public', 'private', or 'unlisted'")
 
-        logger.info(f"Uploading video '{title}' to channel {channel_id} (category {category_id})...")
+        creds = self.auth_manager.get_credentials(channel_id)
+        if not creds:
+            logger.error(f"Channel '{channel_id}' not authenticated")
+            raise RuntimeError(f"Channel '{channel_id}' not authenticated. Call /auth first.")
+
+        youtube = build("youtube", "v3", credentials=creds)
 
         try:
-            request = self.youtube.videos().insert(
+            logger.info("Starting video upload...",
+                        extra={"channel_id": channel_id, "video_file": video_path})
+            request = youtube.videos().insert(
                 part="snippet,status",
                 body={
                     "snippet": {
-                        "categoryId": str(category_id),
                         "channelId": channel_id,
+                        "categoryId": str(category_id),
                         "title": title,
                         "description": description,
                     },
-                    "status": {"privacyStatus": "public"},
+                    "status": {"privacyStatus": privacy_status},
                 },
-                media_body=MediaFileUpload(video_path)
+                media_body=MediaFileUpload(video_path, resumable=True),
             )
-
             response = request.execute()
             video_id = response.get("id")
             if not video_id:
-                logger.error("YouTube API response did not include video ID.")
-                raise RuntimeError("Failed to upload video")
+                logger.error("YouTube API did not return a video ID")
+                raise RuntimeError("Failed to upload video, no video ID returned")
 
-            logger.info(f"Video uploaded successfully. Video ID: {video_id}")
+            logger.info("Video uploaded successfully",
+                        extra={"channel_id": channel_id, "video_id": video_id})
 
             if thumbnail_path:
                 try:
-                    logger.info(f"Setting thumbnail for video {video_id}...")
-                    self.youtube.thumbnails().set(
+                    youtube.thumbnails().set(
                         videoId=video_id,
-                        media_body=MediaFileUpload(thumbnail_path)
+                        media_body=MediaFileUpload(thumbnail_path),
                     ).execute()
-                    logger.info("Thumbnail uploaded successfully.")
+                    logger.info("Thumbnail uploaded",
+                                extra={"video_id": video_id, "thumbnail": thumbnail_path})
                 except HttpError as he:
-                    logger.warning(f"Failed to upload thumbnail: {he}")
-                except Exception as e:
-                    logger.warning(f"Unexpected error uploading thumbnail: {e}")
+                    logger.warning(f"Thumbnail upload failed: {he}",
+                                   extra={"video_id": video_id})
 
             return f"https://youtu.be/{video_id}"
 
         except HttpError as he:
-            logger.error(f"YouTube API error: {he}")
-            raise RuntimeError(f"YouTube API error: {he}")
+            logger.error(f"YouTube API error: {he}", exc_info=True,
+                         extra={"channel_id": channel_id})
+            raise RuntimeError(f"YouTube API error: {he}") from he
         except Exception as e:
-            logger.exception(f"Unexpected error during upload: {str(e)}")
-            raise RuntimeError(f"Unexpected error during upload: {str(e)}")
-
-  
+            logger.exception("Unexpected error during upload",
+                             extra={"channel_id": channel_id})
+            raise RuntimeError(f"Unexpected error: {str(e)}") from e
