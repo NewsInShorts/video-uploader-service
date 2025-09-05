@@ -18,7 +18,7 @@ class BaseConfig:
     
 class ProductionConfig(BaseConfig):
     
-    LOG_LEVEL = logging.ERROR
+    LOG_LEVEL = logging.INFO
     
     CLIENT_SECRETS_FILE  = "secret.json" 
     
