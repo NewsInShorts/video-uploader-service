@@ -22,7 +22,7 @@ class ProductionConfig(BaseConfig):
     
     CLIENT_SECRETS_FILE  = "secret.json" 
     
-    MONGO_URI = "mongodb://localhost:27017"
+    MONGO_URI = "mongodb://root:superman@172.15.0.48,172.15.0.2,172.15.0.177/admin?replicaSet=ind-uploader-mongo-rs"
     MONGO_DB = "video_uploader"
     MONGO_COLLECTION = "upload_requests"
     
