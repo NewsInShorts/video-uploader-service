@@ -20,11 +20,11 @@ class ProductionConfig(BaseConfig):
     
     LOG_LEVEL = logging.INFO
     
-    CLIENT_SECRETS_FILE  = "secret.json" 
+    CLIENT_SECRETS_FILE  = "/var/secrets/google/inshorts-1374-943355242dd4.json"
     
     MONGO_URI = "mongodb://root:superman@172.15.0.48,172.15.0.2,172.15.0.177/admin?replicaSet=ind-uploader-mongo-rs"
     MONGO_DB = "video_uploader"
-    MONGO_COLLECTION = "upload_requests"
+    MONGO_COLLECTION = "UploadRequests"
     
     REDIRECT_URI = "http://localhost:8000/auth/oauth2callback?channel_id="
     
