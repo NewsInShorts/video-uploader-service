@@ -22,3 +22,7 @@ app.include_router(auth_routes, prefix="/auth", tags=["Channel Auth"])
 async def health_check():
     return JSONResponse(content={"status": "ok"})
 
+@app.get("/")
+async def health_check_2():
+    return JSONResponse(content={"status": "ok"})
+
