@@ -20,7 +20,7 @@ class ProductionConfig(BaseConfig):
     
     LOG_LEVEL = logging.INFO
     
-    CLIENT_SECRETS_FILE  = "/var/secrets/google/yt-creds.json"
+    CLIENT_SECRETS_FILE  = "/var/secrets/google/yt_secret.json"
     
     MONGO_URI = "mongodb://root:superman@172.15.0.48,172.15.0.2,172.15.0.177/admin?replicaSet=ind-uploader-mongo-rs"
     MONGO_DB = "video_uploader"
