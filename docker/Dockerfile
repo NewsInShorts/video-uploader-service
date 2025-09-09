@@ -4,6 +4,7 @@ FROM python:3.13-slim-bookworm
 ENV APP_ENV=production
 
 COPY ./requirements.txt /video-uploader-service/requirements.txt
+COPY . /video-uploader-service
 
 WORKDIR /video-uploader-service
 
@@ -24,4 +25,4 @@ RUN pip install -r requirements.txt
 # ENV ELASTIC_APM_TRANSACTION_SAMPLE_RATE=0.05
 # ENV ELASTIC_APM_SPAN_COMPRESSION_SAME_KIND_MAX_DURATION="50ms"
 
-CMD gunicorn -k uvicorn.workers.UvicornWorker --preload --bind 0.0.0.0:8080 app.main:app --workers 4 --timeout 10800
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "--preload", "--bind", "0.0.0.0:8080", "app.main:app", "--workers", "4", "--timeout", "10800"]
