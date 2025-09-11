@@ -34,6 +34,16 @@ def get_cache():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch cache: {str(e)}")
         
+        
+
+@router.get("/load-cache")
+def load_cache():
+    try:
+        return {"cache": auth_manager.load_all_from_db()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load cache: {str(e)}")
+        
+        
 
 CLIENT_SECRETS_FILE = Config.CLIENT_SECRETS_FILE
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
@@ -65,8 +75,6 @@ async def authorize(request: Request):
 
     return RedirectResponse(authorization_url)
 
-
-auth_manager = AuthManager.get_instance()
 
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
