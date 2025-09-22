@@ -195,6 +195,8 @@ class AuthManager:
             result[channel_id] = {
                 "valid": creds.valid,
                 "expired": creds.expired,
-                "scopes": creds.scopes,
+                "scopes": list(creds.scopes) if creds.scopes else [],
+                "expiry": creds.expiry.isoformat() if creds.expiry else None,
+                "has_refresh_token": creds.refresh_token is not None,
             }
-            return result
+        return result
