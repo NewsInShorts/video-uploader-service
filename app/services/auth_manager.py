@@ -8,9 +8,13 @@ from google.oauth2.credentials import Credentials
 from pymongo import MongoClient, errors
 from datetime import datetime
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
-logger = logging.getLogger("auth_manager")
+SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+logger = logging.getLogger(__name__)
 
+logging.basicConfig(
+    level=logging.INFO,  # Show INFO and above
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 class AuthManager:
     _instance = None
@@ -26,6 +30,7 @@ class AuthManager:
         return cls._instance
     
     def __init__(self, client_secrets_file: str, mongo_uri: str, db_name: str):
+        logger.info("Initializing auth manager")
         if not client_secrets_file or not os.path.exists(client_secrets_file):
             logger.error(f"Client secrets file not found: {client_secrets_file}")
             raise FileNotFoundError(f"Client secrets file not found: {client_secrets_file}")
@@ -36,7 +41,6 @@ class AuthManager:
 
         try:
             self.client_secrets_file = client_secrets_file
-            self.client_id, self.client_secret, self.token_uri = self._load_client_secrets(client_secrets_file)
             self.client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
             self.client.admin.command("ping")
         except errors.ConnectionFailure as e:
@@ -45,9 +49,20 @@ class AuthManager:
 
         self.db = self.client[db_name]
         self.tokens = self.db["ChannelTokens"]
+        
+        first_token = self.tokens.find_one({})
+        if not first_token or "token" not in first_token:
+            raise RuntimeError("No credentials found in MongoDB. Authenticate a channel first.")
+        
+        token_data = json.loads(first_token["token"])
 
+        self.client_id = token_data.get("client_id")
+        self.client_secret = token_data.get("client_secret")
+        self.token_uri = "https://oauth2.googleapis.com/token"
+        
         self._cache = {}
         logger.info("AuthManager initialized successfully")
+        self.load_all_from_db()
     
     
     def _load_client_secrets(self, client_secrets_file: str):
@@ -77,6 +92,7 @@ class AuthManager:
             raise RuntimeError(f"Error saving token for channel '{channel_id}': {str(e)}") from e
 
     def load_all_from_db(self):
+        logger.info("Loading all creds from db")
         try:
             records = self.tokens.find({})
             loaded_channels = []
@@ -93,8 +109,8 @@ class AuthManager:
                         token=token_data.get("access_token"),
                         refresh_token=token_data.get("refresh_token"),
                         token_uri=self.token_uri,
-                        client_id=self.client_id,
-                        client_secret=self.client_secret,
+                        client_id=token_data.get("client_id"),
+                        client_secret=token_data.get("client_secret"),
                         scopes=SCOPES,
                     )
     
@@ -114,31 +130,29 @@ class AuthManager:
 
     def _load_from_db(self, channel_id: str):
         try:
+            logger.info("New load from db")
             record = self.tokens.find_one({"channel_id": channel_id})
-            if record and "token" in record:
-                
-                
-                token_data = json.loads(record["token"])
-                
-                creds = Credentials(
-                    token=token_data.get("access_token"),
-                    refresh_token=token_data.get("refresh_token"),
-                    token_uri=self.token_uri,
-                    client_id=self.client_id,
-                    client_secret=self.client_secret,
-                    scopes=SCOPES,
-                )
-                # creds = Credentials.from_authorized_user_info(
-                #     json.loads(record["token"]), SCOPES
-                # )
-                self._cache[channel_id] = creds
-                logger.info(f"----- {self._cache}")
-                logger.info(f"Token loaded from DB for channel '{channel_id}'")
-                return creds
-            logger.warning(f"No token found in DB for channel '{channel_id}'")
-            return None
+            if not record or "token" not in record:
+                logger.warning(f"No token found in DB for channel '{channel_id}'")
+                return None
+    
+            token_data = json.loads(record["token"])
+    
+            creds = Credentials(
+                token=token_data.get("access_token"),
+                refresh_token=token_data.get("refresh_token"),
+                token_uri=token_data.get("token_uri", self.token_uri),
+                client_id=token_data.get("client_id", self.client_id),
+                client_secret=token_data.get("client_secret", self.client_secret),
+                scopes=SCOPES,
+            )
+    
+            self._cache[channel_id] = creds
+            logger.info(f"Token loaded from DB for channel '{channel_id}'")
+            return creds
+    
         except Exception as e:
-            logger.exception("Error loading token from MongoDB")
+            logger.exception(f"Error loading token for channel '{channel_id}'")
             raise RuntimeError(f"Error loading token for channel '{channel_id}': {str(e)}") from e
 
     def get_credentials(self, channel_id: str) -> Credentials:
